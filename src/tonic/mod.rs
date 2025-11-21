@@ -1,4 +1,5 @@
 mod api;
+mod audit;
 mod auth;
 mod logging;
 mod tonic_telemetry;
@@ -39,6 +40,7 @@ use tonic::codec::CompressionEncoding;
 use tonic::transport::{Server, ServerTlsConfig};
 use tonic::{Request, Response, Status};
 
+use crate::common::audit::AuditConfig;
 use crate::common::auth::AuthKeys;
 use crate::common::helpers;
 use crate::common::http_client::HttpClient;
@@ -150,6 +152,7 @@ pub fn init(
     settings: Settings,
     grpc_port: u16,
     runtime: Handle,
+    audit_config: AuditConfig,
 ) -> io::Result<()> {
     runtime.block_on(async {
         let socket =
@@ -189,12 +192,21 @@ pub fn init(
             log::info!("TLS disabled for gRPC API");
         }
 
+        // Prepare audit configuration
+        let audit_enabled = audit_config.enabled;
+        let audit_headers = audit_config.headers_set_arc();
+
         // The stack of middleware that our service will be wrapped in
         let middleware_layer = tower::ServiceBuilder::new()
             .layer(logging::LoggingMiddlewareLayer::new())
             .layer(tonic_telemetry::TonicTelemetryLayer::new(
                 telemetry_collector,
             ))
+            .option_layer(if audit_enabled {
+                Some(audit::AuditMiddlewareLayer::new(audit_headers))
+            } else {
+                None
+            })
             .option_layer({
                 AuthKeys::try_create(
                     &settings.service,

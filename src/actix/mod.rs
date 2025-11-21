@@ -1,5 +1,6 @@
 pub mod actix_telemetry;
 pub mod api;
+mod audit;
 mod auth;
 mod certificate_helpers;
 pub mod helpers;
@@ -37,8 +38,10 @@ use crate::actix::api::service_api::config_service_api;
 use crate::actix::api::shards_api::config_shards_api;
 use crate::actix::api::snapshot_api::config_snapshots_api;
 use crate::actix::api::update_api::config_update_api;
+use crate::actix::audit::AuditTransform;
 use crate::actix::auth::{Auth, WhitelistItem};
 use crate::actix::web_ui::{WEB_UI_PATH, web_ui_factory, web_ui_folder};
+use crate::common::audit::AuditConfig;
 use crate::common::auth::AuthKeys;
 use crate::common::debugger::DebuggerState;
 use crate::common::health;
@@ -58,6 +61,7 @@ pub fn init(
     health_checker: Option<Arc<health::HealthChecker>>,
     settings: Settings,
     logger_handle: LoggerHandle,
+    audit_config: AuditConfig,
 ) -> io::Result<()> {
     actix_web::rt::System::new().block_on(async {
         // Nothing to verify here.
@@ -96,6 +100,10 @@ pub fn init(
             api_key_whitelist.push(WhitelistItem::prefix(WEB_UI_PATH));
         }
 
+        // Prepare audit configuration
+        let audit_enabled = audit_config.enabled;
+        let audit_headers = audit_config.headers_set_arc();
+
         let mut server = HttpServer::new(move || {
             let cors = Cors::default()
                 .allow_any_origin()
@@ -129,6 +137,11 @@ pub fn init(
                         .exclude("/readyz")
                         .exclude("/livez"),
                 )
+                // Audit middleware - logs all requests with selected headers
+                .wrap(Condition::new(
+                    audit_enabled,
+                    AuditTransform::new(audit_headers.clone()),
+                ))
                 .wrap(actix_telemetry::ActixTelemetryTransform::new(
                     actix_telemetry_collector.clone(),
                 ))

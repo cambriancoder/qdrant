@@ -333,6 +333,19 @@ cluster:
 # Read more: https://qdrant.tech/documentation/guides/telemetry
 telemetry_disabled: false
 
+# Audit logging configuration.
+# When enabled, all API requests (HTTP and gRPC) will be logged with selected headers.
+# audit:
+#   # Enable or disable audit logging. Default: false
+#   enabled: true
+#   # List of request headers to include in audit logs (case-insensitive).
+#   # Sensitive headers like "authorization" and "api-key" will have their values redacted.
+#   # Common headers to audit: x-request-id, x-forwarded-for, user-agent
+#   headers:
+#     - x-request-id
+#     - x-forwarded-for
+#     - user-agent
+
 # TLS configuration.
 # Required if either service.enable_tls or cluster.p2p.enable_tls is true.
 tls:
